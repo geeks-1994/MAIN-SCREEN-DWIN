@@ -16,6 +16,6 @@ float dwinDecodeFloat(const uint8_t *d);
 bool readU16VP(uint16_t vp, uint16_t &outValue);
 bool readFloatVP(uint16_t vp, float &outValue);
 float decodeFloatBE(uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3);
-
+void DWIN_ReadFrames(Stream &port);
 
 #endif

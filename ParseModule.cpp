@@ -6,7 +6,6 @@
 #include <string.h>
 #include <Arduino.h>
 #include <climits>
-
 char buffer[100];
 
 //esta funcion preenderisa la entrada serial  quitando los caracteres que se le mencione
@@ -23,32 +22,43 @@ return result != nullptr ? result : "";
 
 
 //funcion de parseo de mensajes
-int  ParseMessage(char *cadena,char tokens[][20]){
+int ParseMessage(char *cadena, char tokens[][50]) {
 
-const char* firstInput = OutputMessage(cadena,"<");
-const  char* secondInput = OutputMessage(firstInput,">");
+    if (!cadena) return 0;
 
-char messageInput[100];
-strcpy(messageInput,secondInput);
+    const char *firstInput  = OutputMessage(cadena, "<");
+    if (!firstInput) return 0;
 
-char *answer = strtok(messageInput,"|");
-int count = 0;
+    const char *secondInput = OutputMessage(firstInput, ">");
+    if (!secondInput) return 0;
 
-while (answer  != NULL && count < 10){
+    // Buffer más grande para evitar overflow
+    char messageInput[256];
 
-strncpy(tokens[count], answer, 20);
-tokens[count][19] = '\0';
-count ++;
-answer = strtok(NULL,"|");
-}
+    // Copia segura
+    strncpy(messageInput, secondInput, sizeof(messageInput) - 1);
+    messageInput[sizeof(messageInput) - 1] = '\0';
 
-return count;
-  
+    int count = 0;
+    char *answer = strtok(messageInput, "|");
+
+    while (answer != NULL && count < 10) {
+
+        // Copia segura del token completo (hasta 49 chars)
+        strncpy(tokens[count], answer, 50 - 1);
+        tokens[count][50 - 1] = '\0';
+
+        count++;
+        answer = strtok(NULL, "|");
+    }
+
+    return count;
 };
 
 
 
-const  char*  WordKey(int Tokens,char parseMessage[][20])
+
+const  char*  WordKey(int Tokens,char parseMessage[][50])
 {
 static char  endWord[100];
 static char secretWord[100];
@@ -115,6 +125,7 @@ String generateChecksum(String cadenaTest) {
 
     // Crear la cadena con el formato <cadenaTest|crc>
     String dataChecksum = "<" + cadenaTest + "|" + hexString + ">";
+
 
     return dataChecksum;
 }

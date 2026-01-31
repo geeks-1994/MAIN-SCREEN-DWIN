@@ -24,5 +24,8 @@ void ShowInputScreen(char event[][50]);
 void Printedvehicle(char event[][50]);
 void QRscreen(char event[][50]);
 void DebugSend(const char *label, const char *data);
+void splashScreen(int value);
+void dwinStartupXP();
+void dwinErrorTone_Loud();
 
 #endif

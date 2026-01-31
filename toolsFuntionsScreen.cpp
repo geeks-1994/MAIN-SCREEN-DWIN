@@ -25,9 +25,11 @@ static const uint16_t  TotalGross = 0x100E;
 static const uint16_t  heigtLevel = 0x1012;
 static const uint16_t  flowRate  = 0x1000; 
 static const uint16_t  preset = 0x1006;
-static const uint16_t counter = 0x100A;
+static const uint16_t  counter = 0x100A;
 static const uint16_t  volume = 0x1002;
-static const uint16_t   inputName = 0x1100;
+static const uint16_t  inputName = 0x1100;
+static const uint16_t  bannersplashscreen = 0x1300;
+static const uint16_t  iconstatus = 0x1200;
 
 //variables nivel texto
 static  char *totalCounter = "<REQ|SCREEN|MAIN|CONFIG|TGAL>";
@@ -344,9 +346,6 @@ float initcouter = charToFloatCustom( event[5],2);
 writeU32(preset,presecounter * 100);
 writeU32(counter,initcouter * 100);
 
-
-
-
 };
 
 
@@ -367,6 +366,71 @@ void QRscreen(char event[][50]){
       HostSerial.println(SendCommandCPU(inputdata));
 
 };
+
+
+void splashScreen(int value) {
+
+    writeTextClean(bannersplashscreen,"......Cargando gstation 5.9 ....", 150);
+    
+
+};
+
+
+
+// “Melodía” tipo XP usando solo ritmos
+void dwinStartupXP() {
+  // 💥 Subimos fuerza del buzzer para este sonido
+  dwinSetBuzzDuty(0x0300);   // prueba también 0x0300 si quieres más fuerte
+
+  // NOTA 1: tono medio, dur. ~120 ms
+  dwinSetBuzzFreqDiv1(0x80); // más grave
+  dwinSetBuzzTime(12);       // 12 * 10 ms = 120 ms
+  dwinBuzzerBeep();
+  delay(160);
+
+  // NOTA 2: un poco más aguda, dur. ~160 ms
+  dwinSetBuzzFreqDiv1(0x70);
+  dwinSetBuzzTime(16);       // 160 ms
+  dwinBuzzerBeep();
+  delay(200);
+
+  // NOTA 3: más aguda y larga, cierra como XP
+  dwinSetBuzzFreqDiv1(0x60);
+  dwinSetBuzzTime(24);       // 240 ms aprox
+  dwinBuzzerBeep();
+
+  // 🔉 opcional: regresar duty a un valor más suave para el resto de beeps
+  dwinSetBuzzDuty(0x00F0);
+
+};
+
+
+void dwinErrorTone_Loud() {
+  // 💥 Subimos la fuerza del buzzer
+  dwinSetBuzzDuty(0x0280);     // prueba 0x0300 si quieres aún más fuerte
+
+  // Si quieres respetar EXACTAMENTE la frecuencia actual,
+  // puedes comentar esta línea. Aquí uso un valor medio "tipo sistema":
+  dwinSetBuzzFreqDiv1(0x70);   // misma familia de frecuencia que el startup
+
+  // BEEP 1: largo (~220 ms)
+  dwinSetBuzzTime(22);         // 22 * 10ms = 220 ms
+  dwinBuzzerBeep();
+  delay(260);
+
+  // BEEP 2: largo (~220 ms)
+  dwinSetBuzzTime(22);
+  dwinBuzzerBeep();
+  delay(260);
+
+  // BEEP 3: corto (~80 ms) como remate
+  dwinSetBuzzTime(8);          // 80 ms
+  dwinBuzzerBeep();
+
+  // 🔉 Regresamos el duty a un valor más suave para el resto de sonidos
+  dwinSetBuzzDuty(0x00F0);
+};
+
 
 
 

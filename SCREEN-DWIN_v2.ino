@@ -3,14 +3,18 @@
 #include "SerialPorts.h"
 #include "DwinToolsInterface.h"
 #include "toolsFunctionsScreen.h"
+#include "keypadhandler.h"
+#include "BuzzerMelodies.h"
 
-
+BuzzerMelodies buzzer;
 // variables globales de uso;
 String InputSerial = "";
 char messageConvert[100];
 
 
 char *initScreen = "<REQ|SCREEN|MAIN|MESSAGETO|SCREEN>";
+
+
 
 
 //lista de funciones 
@@ -127,8 +131,13 @@ SerialPorts::begin();
 DebugSerial.println("DEBUG listo usb");
 delay(2000);
 HostSerial.println(SendCommandCPU(initScreen));
-
-
+delay(400);
+dwinChangePage_VP(2);
+splashScreen(0);
+dwinBuzzerInit_ByRegister();
+delay(200);
+buzzer.begin();
+buzzer.playStartup();
 
 }
 
@@ -151,4 +160,15 @@ void loop() {
     if(DwinSerial.available() > 0){
         DWIN_ReadFrames(DwinSerial);
     }
+
+
+    if(HardwareKeypad.available() > 0 ){
+     uint8_t code = HardwareKeypad.read();
+
+    KeypadAction action = parseKeypad(code);
+    handleKeypadAction(action, code);
+
+    }
+
+
 };

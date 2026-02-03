@@ -1,6 +1,8 @@
 #include "keypadhandler.h"
 #include "SerialPorts.h"      // para DebugSerial
 #include "DwinToolsInterface.h" // donde está dwinKeypadTouch + KP_*
+#include "toolsFunctionsScreen.h"
+#include "ParseModule.h"
 
 // ===== Parseo del byte recibido =====
 KeypadAction parseKeypad(uint8_t code) {
@@ -112,6 +114,13 @@ void handleKeypadAction(KeypadAction action, uint8_t rawCode) {
     case KEY_ESC:
       DebugSerial.println("KEYPAD ESC");
       dwinKeypadTouch(KP_CANCEL);
+      
+      char answer[50];
+      snprintf(answer,sizeof(answer),"<RES|SCREEN|%s|SGET|%s|CANCEL|>", screenflow.device,screenflow.inputNameKeypad);      
+      DebugSend("[TX]",answer);
+
+      HostSerial.println(SendCommandCPU(answer));
+
       break;
 
     // ===== PGUP / PGDN (si luego los usas para otra cosa) =====

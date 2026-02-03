@@ -1,4 +1,5 @@
 #include "esp32-hal.h"
+#include "BuzzerMelodies.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -10,6 +11,11 @@
 #include "ParseModule.h"
 #include "toolsFunctionsScreen.h"
 #include <Arduino.h>
+
+
+BuzzerMelodies buzzer;
+
+
 /// Variables tipo texto
 
 static const uint16_t  GSNM_station = 0x2100;
@@ -146,9 +152,10 @@ void GoHomePage(char event[][50]) {
 
     delay(600);
     HostSerial.println(SendCommandCPU(totalCounter));
-
+     delay(600);
     dwinChangePage_VP(0);
-}
+
+};
 
 
 void getConfigData(char event[][50]) {
@@ -166,8 +173,13 @@ void getConfigData(char event[][50]) {
 
   if (strcmp(answer, "CONFIGGSUM") == 0) {
 
-    writeTextClean(unitMeasure, event[5], 10);
+ 
     DebugSend("Unidad de medida:", event[5]);
+    if(strcmp(event[5], "Galones:Gal") == 0){
+   writeTextClean(unitMeasure, "Gal", 3);
+    }else if(strcmp(event[5], "Litros:Lts") == 0){
+writeTextClean(unitMeasure, "Lts", 3);
+    }
 
   } else if (strcmp(answer, "CONFIGGSNM") == 0) {
 
@@ -300,18 +312,20 @@ void Getfindespacho(char event[][50]) {
     delay(400);
     float counterTotal = charToFloatCustom(event[4], 2);
     writeU32(counter,counterTotal *100);
+    writeU16(iconstatus,0);
     // También loguea esta trama si quieres verla en debug
     DebugSend("[TX]", totalCounter);
     HostSerial.println(SendCommandCPU(totalCounter));
 
 
-
-
 };
+
+
 
 void ShowInputScreen(char event[][50]){
 
 char answer[50];
+dwinKeypadTouch(AUTO_CURSOR);
 
 snprintf(answer,sizeof(answer),"<RES|SCREEN|%s|SGET|%s|%s|OK>", event[1],event[4],event[5]);
 
@@ -322,7 +336,8 @@ strncpy(screenflow.device,event[1],sizeof(screenflow.device) - 1 );
 DebugSend("[TX]",answer);
 HostSerial.println(SendCommandCPU(answer));
 dwinChangePage_VP(1);
-
+delay(600);
+dwinKeypadTouch(AUTO_CURSOR);
 writeTextClean(inputName,event[4],20);
 
 
@@ -338,6 +353,8 @@ snprintf(answer,sizeof(answer) ,"<RES|SCREEN|%s|TAGID|%s>", event[1],event[4]);
 DebugSend("[TX]",answer);
 HostSerial.println(SendCommandCPU(answer));
 writeTextClean(vehicleID,event[4],20);
+writeU16(iconstatus,1);
+buzzer.playOk();
 return;
 }
 
@@ -433,5 +450,43 @@ void dwinErrorTone_Loud() {
 
 
 
+// Función auxiliar para enviar la respuesta
+static void sendBuzzerResponse(const char* device, const char* command, const char* status) {
+    char answer[80];  // un poco más grande por seguridad
+    snprintf(answer, sizeof(answer),
+             "<RES|SCREEN|%s|BUZZER|%s|%s>", device, command, status);
 
+    HostSerial.println(SendCommandCPU(answer));
+    DebugSend("[TX]", answer);
+};
 
+void ExecuteBuzzer(char event[][50]) {
+    // Por legibilidad
+    const char* device  = event[1];
+    const char* command = event[4];
+
+    // Opcional: validar que vengan datos
+    if (device[0] == '\0' || command[0] == '\0') {
+        DebugSend("[ERR]", "ExecuteBuzzer: device o command vacíos");
+        return;
+    }
+
+    // Ejecutar acción según el comando
+    if (strcmp(command, "STARTUP") == 0) {
+        buzzer.playStartup();
+        sendBuzzerResponse(device, command, "OK");
+
+    } else if (strcmp(command, "ERROR") == 0) {
+        buzzer.playError();
+        sendBuzzerResponse(device, command, "OK");
+
+    } else if (strcmp(command, "SUCCESS") == 0) {
+        buzzer.playOk();
+        sendBuzzerResponse(device, command, "OK");
+
+    } else {
+        // Manejo de comando desconocido
+        DebugSend("[ERR]", "ExecuteBuzzer: comando de buzzer desconocido");
+        sendBuzzerResponse(device, command, "UNKNOWN");
+    }
+};

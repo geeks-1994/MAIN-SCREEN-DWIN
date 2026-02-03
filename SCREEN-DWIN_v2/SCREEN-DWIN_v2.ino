@@ -6,7 +6,6 @@
 #include "keypadhandler.h"
 #include "BuzzerMelodies.h"
 
-BuzzerMelodies buzzer;
 // variables globales de uso;
 String InputSerial = "";
 char messageConvert[100];
@@ -101,7 +100,8 @@ Command commands[] = {
     {"REQRASPSGET",ShowInputScreen},
     {"REQRASPSCREENTAGID",Printedvehicle},
     {"INFMAINDISP",Printedvehicle},
-    {"REQRFIDQR",QRscreen}
+    {"REQRFIDQR",QRscreen},
+    {"REQRASPSCREENBUZZER",ExecuteBuzzer}
 };
 
 
@@ -128,16 +128,19 @@ void setup() {
 // inicio el puerto seriales.
 SerialPorts::begin();
 
-DebugSerial.println("DEBUG listo usb");
-delay(2000);
+delay(1000);
 HostSerial.println(SendCommandCPU(initScreen));
-delay(400);
+DebugSerial.println("DEBUG listo usb");
 dwinChangePage_VP(2);
 splashScreen(0);
+
+delay(3000);
+
+delay(400);
+
 dwinBuzzerInit_ByRegister();
 delay(200);
 buzzer.begin();
-buzzer.playStartup();
 
 }
 

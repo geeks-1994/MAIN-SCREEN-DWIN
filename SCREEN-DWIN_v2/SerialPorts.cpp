@@ -9,8 +9,8 @@ HardwareSerial HostSerial(2);   // UART2 -- este  es el puerto serial que va hac
 static const int DWIN_RX  = 16;
 static const int DWIN_TX  = 17;
 
-static const int HOST_RX  = 4;
-static const int HOST_TX  = 2;
+static const int HOST_RX  = 2;
+static const int HOST_TX  = 4;
 
 static const int KEYPAD_RX = 25;
 static const int KEYPAD_TX = 26;

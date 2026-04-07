@@ -93,15 +93,20 @@ Command commands[] = {
     {"RESMAINCONFIG",getConfigData},
     {"REQRASPBANNER",Showbanner},
     {"REQRASPSCREENBANNER",Showbanner},
+    {"REQMAINBANNER",Showbanner},
     {"REQMAINSCREENPING",ResponsePing},
     {"INFMAINSCREENDINA",DinaRefuel},
     {"INFMAINDESPACHO",printRefuel},
     {"REQMAINFINDESPACHO",Getfindespacho},
     {"REQRASPSGET",ShowInputScreen},
+    {"REQMAINSGET",ShowInputScreen},
+    {"REQMAINSGETA",ShowInputScreen},
     {"REQRASPSCREENTAGID",Printedvehicle},
     {"INFMAINDISP",Printedvehicle},
     {"REQRFIDQR",QRscreen},
-    {"REQRASPSCREENBUZZER",ExecuteBuzzer}
+    {"REQRASPSCREENBUZZER",ExecuteBuzzer},
+    {"REQSCREENMAINFACTORY",factory},
+    {"REQMESCREENFACTORY",factoryScreenData}
 };
 
 
@@ -141,7 +146,7 @@ delay(400);
 dwinBuzzerInit_ByRegister();
 delay(200);
 buzzer.begin();
-
+LoadLastRefuel();
 }
 
 

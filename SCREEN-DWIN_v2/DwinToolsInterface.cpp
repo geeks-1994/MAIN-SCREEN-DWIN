@@ -1,3 +1,6 @@
+#include <string.h>
+#include "HardwareSerial.h"
+#include <stdint.h>
 #include <stdio.h>
 #include "SerialPorts.h"
 #include "DwinToolsInterface.h"
@@ -12,6 +15,9 @@ static const uint16_t VP_KEY_FLOAT      = 0x1014; // float (2 words) -> 0x1014..
 static const uint16_t VP_KEY_ENTER_FLAG = 0x1018; // u16  (1 word)  -> 0x1018..0x1019
 static const uint16_t VP_KEY_DOT_USED   = 0x101A; // u16  (opcional)
 
+
+static const uint16_t vp_input_key = 0x1014;
+static const uint16_t vp_printed_key = 0x2006;
 
 // =====================================================
 // FUNCIONES NUMÉRICAS DGUS (WRITE)
@@ -194,6 +200,25 @@ float decodeFloatBE(uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3) {
 
 
 
+// conversor  uint64_t
+uint64_t DWIN_BytesToU64BE(
+  uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3,
+  uint8_t b4, uint8_t b5, uint8_t b6, uint8_t b7
+) {
+  uint64_t v = 0;
+  v |= ((uint64_t)b0 << 56);
+  v |= ((uint64_t)b1 << 48);
+  v |= ((uint64_t)b2 << 40);
+  v |= ((uint64_t)b3 << 32);
+  v |= ((uint64_t)b4 << 24);
+  v |= ((uint64_t)b5 << 16);
+  v |= ((uint64_t)b6 << 8);
+  v |= ((uint64_t)b7);
+  return v;
+};
+
+
+
 // ------------------ 1) Convertidor a float (Big-Endian) ------------------
 float DWIN_BytesToFloatBE(uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3) {
   union {
@@ -217,54 +242,197 @@ float DWIN_BytesToFloatBE(uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3) {
     2 = VP_U16      (VP con entero 16-bit)
     3 = VP_FLOAT    (VP con float 32-bit)
 */
-void DWIN_HandleMessage(uint8_t type, uint16_t vp, uint16_t u16val, float fval, uint8_t key) {
+
+void PrintU64(uint64_t value) {
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%llu", (unsigned long long)value);
+  DebugSerial.println(buf);
+}
+
+
+//util convertir decimales
+float DWIN_ToFloat(uint32_t rawValue, uint8_t decimals) {
+  float divisor = 1.0f;
+
+  for (uint8_t i = 0; i < decimals; i++) {
+    divisor *= 10.0f;
+  }
+
+  return (float)rawValue / divisor;
+};
+
+
+
+float DWIN_ScaledFloatToFloat(float fval, uint8_t decimals) {
+  uint32_t raw = (uint32_t)(fval + 0.5f);  // redondea el float recibido
+
+  float divisor = 1.0f;
+  for (uint8_t i = 0; i < decimals; i++) {
+    divisor *= 10.0f;
+  }
+
+  return ((float)raw) / divisor;
+};
+
+
+void U64ToFixedString(uint64_t value, uint8_t decimals, char* out, size_t outSize) {
+  char temp[32];
+  snprintf(temp, sizeof(temp), "%llu", (unsigned long long)value);
+
+  if (decimals == 0) {
+    snprintf(out, outSize, "%s", temp);
+    return;
+  }
+
+  size_t len = strlen(temp);
+
+  // Caso: el número tiene menos dígitos que los decimales
+  // Ej: value=25, decimals=2 => 0.25
+  if (len <= decimals) {
+    size_t zeros = decimals - len;
+
+    size_t pos = 0;
+    if (pos < outSize - 1) out[pos++] = '0';
+    if (pos < outSize - 1) out[pos++] = '.';
+
+    for (size_t i = 0; i < zeros && pos < outSize - 1; i++) {
+      out[pos++] = '0';
+    }
+
+    for (size_t i = 0; i < len && pos < outSize - 1; i++) {
+      out[pos++] = temp[i];
+    }
+
+    out[pos] = '\0';
+    return;
+  }
+
+  // Caso normal: insertar punto dentro del número
+  size_t intLen = len - decimals;
+  size_t pos = 0;
+
+  for (size_t i = 0; i < intLen && pos < outSize - 1; i++) {
+    out[pos++] = temp[i];
+  }
+
+  if (pos < outSize - 1) out[pos++] = '.';
+
+  for (size_t i = intLen; i < len && pos < outSize - 1; i++) {
+    out[pos++] = temp[i];
+  }
+
+  out[pos] = '\0';
+};
+
+
+
+void DWIN_HandleMessage(uint8_t type, uint16_t vp, uint16_t u16val, float fval, uint8_t key, uint64_t u64val) {
   // 🔥 EJEMPLO: Tu VP de eventos
   if (type == 1 && vp == 0x2000) {
     // key: F0 cancel, F1 ok, F2 back (según DGUS)
     if (key == 0xF0) {
       DebugSend("[RX]", "🛑 CANCEL (vp=0x2000) code=0x");
-      DebugSerial.println(u16val, HEX);   // u16val puede ser tu "codigo de fallo"
-      // cancelarDespacho(); // <-- tu función real
-    //  DebugSend("[TX]",screenflow.inputNameKeypad);
-      char answer[50];
-      snprintf(answer,sizeof(answer),"<RES|SCREEN|%s|SGET|%s|CANCEL|>", screenflow.device,screenflow.inputNameKeypad);      
-      
-      DebugSend("[TX]",answer);
-
-      HostSerial.println(SendCommandCPU(answer));
-
-    } else if (key == 0xF1) {
-      DebugSerial.print("✅ OK code=0x");
-
       DebugSerial.println(u16val, HEX);
-    } else if (key == 0xF2) {
+
+      char answer[80];
+      snprintf(answer, sizeof(answer),
+               "<RES|SCREEN|%s|SGET|%s|CANCEL|>",
+               screenflow.device,
+               screenflow.inputNameKeypad);
+
+      DebugSend("[TX]", answer);
+      HostSerial.println(SendCommandCPU(answer));
+    }
+    else if (key == 0xF1) {
+      DebugSerial.print("✅ OK code=0x");
+      DebugSerial.println(u16val, HEX);
+    }
+    else if (key == 0xF2) {
       DebugSerial.println("↩️ BACK");
     }
     return;
   }
 
-  // 🔥 EJEMPLO: Leer un float en VP 0x1014 (teclado numérico)
-  if (type == 3 && vp == 0x1014) {
-    DebugSerial.print("🔢 VP 0x1014 float = ");
-    DebugSerial.println(fval, 2);
-
-  //DebugSend("[TX]",screenflow.inputNameKeypad);
-      char answer[100];
-      snprintf(answer,sizeof(answer),"<RES|SCREEN|%s|SGET|%s|OK|%.2f>", screenflow.device,screenflow.inputNameKeypad,fval);      
-      
-      DebugSend("[TX]",answer);
-
-      HostSerial.println(SendCommandCPU(answer));
+  if (type == 1 && vp == 0x2006) {
+    DebugSend("[RX]", "presionaste la impresora");
+    HostSerial.println(SendCommandCPU("<REQ|SCREEN|RASP|PRINTER|PRINT>"));
     return;
   }
 
-  // 🔥 EJEMPLO: Cualquier entero 16-bit
+  // 🔥 FLOAT clásico
+  if (type == 3 && vp == vp_input_key) {
+      DebugSerial.print("🔢 VP 0x");
+  DebugSerial.print(vp, HEX);
+  DebugSerial.print(" raw float = ");
+  DebugSerial.println(fval, 0);
+
+  float dataInput = DWIN_ScaledFloatToFloat(45590, 2);
+
+  DebugSerial.print("🔢 convertido = ");
+  DebugSerial.println(dataInput, 2);
+
+  char answer[100];
+  snprintf(answer, sizeof(answer),
+           "<RES|SCREEN|%s|SGET|%s|OK|%.2f>",
+           screenflow.device,
+           screenflow.inputNameKeypad,
+           fval);
+
+  DebugSend("[TX]", answer);
+  HostSerial.println(SendCommandCPU(answer));
+  return;
+  }
+
+  // 🔥 EXTRA LONG INT (8 bytes)
+if (type == 4 && vp == vp_input_key) {
+  DebugSerial.print("🔢 VP 0x");
+  DebugSerial.print(vp, HEX);
+  DebugSerial.print(" U64 RAW = ");
+  PrintU64(u64val);
+
+  char valueStr[40];
+
+  // Caso especial: DATE & TIME => quitar últimos 2 dígitos
+  if (strcmp(screenflow.inputNameKeypad, "DATE & TIME") == 0) {
+    uint64_t trimmed = u64val / 100ULL;
+
+    snprintf(valueStr, sizeof(valueStr), "%llu",
+             (unsigned long long)trimmed);
+
+    DebugSerial.print("🕒 DATE & TIME FIX = ");
+    DebugSerial.println(valueStr);
+  } else {
+    // Comportamiento normal con 2 decimales
+    U64ToFixedString(u64val, 2, valueStr, sizeof(valueStr));
+  }
+
+  DebugSerial.print("🔢 FINAL = ");
+  DebugSerial.println(valueStr);
+
+  const char* commandType = "SGET";
+  if (strcmp(screenflow.inputNameKeypad, "NAME:") == 0) {
+    commandType = "SGETA";
+  }
+
+  char answer[120];
+  snprintf(answer, sizeof(answer),
+           "<RES|SCREEN|%s|%s|%s|OK|%s>",
+           screenflow.device,
+           commandType,
+           screenflow.inputNameKeypad,
+           valueStr);
+
+  DebugSend("[TX]", answer);
+  HostSerial.println(SendCommandCPU(answer));
+  return;
+}
+
+  // 🔥 Cualquier entero 16-bit
   if (type == 2) {
     DebugSerial.print("📥 VP=0x");
     DebugSerial.print(vp, HEX);
     DebugSerial.print(" U16=0x");
     DebugSerial.println(u16val, HEX);
-
     return;
   }
 
@@ -276,8 +444,22 @@ void DWIN_HandleMessage(uint8_t type, uint16_t vp, uint16_t u16val, float fval, 
   DebugSerial.print(" u16=0x");
   DebugSerial.print(u16val, HEX);
   DebugSerial.print(" key=0x");
-  DebugSerial.println(key, HEX);
-};
+  DebugSerial.print(key, HEX);
+
+  if (type == 4) {
+    DebugSerial.print(" u64=");
+    char tmp[32];
+    snprintf(tmp, sizeof(tmp), "%llu", (unsigned long long)u64val);
+    DebugSerial.print(tmp);
+  }
+
+  if (type == 3) {
+    DebugSerial.print(" f=");
+    DebugSerial.print(fval, 4);
+  }
+
+  DebugSerial.println();
+}
 
 
 
@@ -306,8 +488,12 @@ void DWIN_ReadFrames(Stream &port) {
       buf[idx++] = b;
       continue;
     }
+
     if (idx == 1) {
-      if (b != 0xA5) { idx = 0; continue; }
+      if (b != 0xA5) {
+        idx = 0;
+        continue;
+      }
       buf[idx++] = b;
       continue;
     }
@@ -315,16 +501,18 @@ void DWIN_ReadFrames(Stream &port) {
     // ---- store bytes ----
     buf[idx++] = b;
 
-    // LEN arrived -> expected total bytes = 3 + LEN
+    // LEN arrived
     if (idx == 3) {
       expected = 3 + buf[2];
-      if (expected > (int)sizeof(buf)) { idx = 0; expected = -1; }
+      if (expected > (int)sizeof(buf)) {
+        idx = 0;
+        expected = -1;
+      }
     }
 
     // ---- complete frame ----
     if (expected > 0 && idx >= expected) {
 
-      // Debug HEX opcional
       Serial.print("RX: ");
       for (int i = 0; i < idx; i++) {
         if (buf[i] < 0x10) Serial.print('0');
@@ -333,35 +521,39 @@ void DWIN_ReadFrames(Stream &port) {
       }
       Serial.println();
 
-      // Solo procesamos upload (83) aquí
       if (buf[3] == 0x83 && idx >= 7) {
         uint16_t vp = ((uint16_t)buf[4] << 8) | buf[5];
 
-        // Caso A) Return Key Code: LEN=06 y idx=9 -> VP(2)+VAL(2)+KEY(1)
+        // Caso A) Return Key Code
         if (buf[2] == 0x06 && idx >= 9) {
           uint16_t val = ((uint16_t)buf[6] << 8) | buf[7];
           uint8_t key  = buf[8];
-          DWIN_HandleMessage(1, vp, val, 0.0f, key);
+          DWIN_HandleMessage(1, vp, val, 0.0f, key, 0);
         }
-        // Caso B) Upload U16 simple: LEN=05 y idx=8 -> VP(2)+VAL(2)
+        // Caso B) Upload U16 simple
         else if (buf[2] == 0x05 && idx >= 8) {
           uint16_t val = ((uint16_t)buf[6] << 8) | buf[7];
-          DWIN_HandleMessage(2, vp, val, 0.0f, 0);
+          DWIN_HandleMessage(2, vp, val, 0.0f, 0, 0);
         }
-        // Caso C) Upload float típico: ... VP(2)+WORDS(1=02)+4 bytes
-        // Ejemplo que tú validabas: buf[6]==0x02 y luego 4 bytes
+        // Caso C) Float de 4 bytes = 2 words
         else if (idx >= 11 && buf[6] == 0x02) {
           float f = DWIN_BytesToFloatBE(buf[7], buf[8], buf[9], buf[10]);
-          DWIN_HandleMessage(3, vp, 0, f, 0);
+          DWIN_HandleMessage(3, vp, 0, f, 0, 0);
+        }
+        // Caso D) Extra long int = 8 bytes = 4 words
+        else if (idx >= 15 && buf[6] == 0x04) {
+          uint64_t v64 = DWIN_BytesToU64BE(
+            buf[7], buf[8], buf[9], buf[10],
+            buf[11], buf[12], buf[13], buf[14]
+          );
+          DWIN_HandleMessage(4, vp, 0, 0.0f, 0, v64);
         }
       }
 
-      // reset
       idx = 0;
       expected = -1;
     }
 
-    // safety
     if (idx >= sizeof(buf)) {
       idx = 0;
       expected = -1;

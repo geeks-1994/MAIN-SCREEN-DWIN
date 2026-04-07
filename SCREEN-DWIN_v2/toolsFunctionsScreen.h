@@ -31,5 +31,7 @@ void DebugSend(const char *label, const char *data);
 void splashScreen(int value);
 void dwinStartupXP();
 void dwinErrorTone_Loud();
-
+void factory(char event[][50]);
+void factoryScreenData(char event[][50]);
+void LoadLastRefuel();
 #endif

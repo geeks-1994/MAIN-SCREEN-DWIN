@@ -11,16 +11,16 @@
 #include "ParseModule.h"
 #include "toolsFunctionsScreen.h"
 #include <Arduino.h>
-
+#include "ConfigManager.h"
 
 BuzzerMelodies buzzer;
-
+ConfigManager config;
 
 /// Variables tipo texto
 
 static const uint16_t  GSNM_station = 0x2100;
 static const uint16_t vehicleID = 0x2110;
-static const uint16_t unitMeasure = 0x2120;
+static const uint16_t unitMeasure = 0x2008;
 static const uint16_t banner = 0x2200;
 
 
@@ -270,12 +270,37 @@ void ResponsePing(char event[][50]){
 };
 
 
-void DinaRefuel(char event[][50]){
-// char answer[30];
+void DinaRefuel(char event[][50]) {
+  const char* ns = "LastRefuel";
+  const char* bannerMsg = "DESPACHO NO AUTORIZADO";
 
-writeTextClean(vehicleID,event[3],20);
-writeTextClean(banner,"DESPACHO NO AUTORIZADO",150);
-};
+  // Validar contenido de vehicle
+  const char* vehicle = event[3];
+
+  if (vehicle == NULL || vehicle[0] == '\0') {
+    DebugSend("[ERR]", "DinaRefuel: vehicle vacio");
+    writeTextClean(vehicleID, "", 20);
+    writeTextClean(banner, bannerMsg, 150);
+    return;
+  }
+
+  config.begin(ns);
+
+  // Mostrar en pantalla
+  writeTextClean(vehicleID, vehicle, 20);
+  writeTextClean(banner, bannerMsg, 150);
+
+  // Guardar ultimo vehicle asociado
+  config.setString("vehicle", String(vehicle));
+
+  config.end();
+
+  // Debug
+  DebugSerial.println("===== DINA REFUEL =====");
+  DebugSerial.print("Vehicle: ");
+  DebugSerial.println(vehicle);
+  DebugSend("[TX]", "DinaRefuel procesado");
+}
 
 void printRefuel(char event[][50]){
 
@@ -288,68 +313,112 @@ writeU16(flowRate,flowRatePrint * 100);
 
 };
 
-
 void Getfindespacho(char event[][50]) {
 
-    // Validación mínima
-    if (event[1][0] == '\0' || event[4][0] == '\0' || event[5][0] == '\0' || event[6][0] == '\0') {
+    // Validación primero
+    if (event[1][0] == '\0' || event[4][0] == '\0' ||
+        event[5][0] == '\0' || event[6][0] == '\0') {
         DebugSerial.println("[DEBUG] Getfindespacho: faltan campos en event[]");
         return;
     }
 
-    char answer[200];  // buffer suficiente
+    char answer[200];
 
     snprintf(answer, sizeof(answer),
              "<RES|SCREEN|%s|FINDESPACHO|%s|%s|%s|OK>",
              event[1], event[4], event[5], event[6]);
 
-    // Debug de lo que se envía
     DebugSend("[TX]", answer);
-
-    // Envío real
     HostSerial.println(SendCommandCPU(answer));
 
     delay(400);
+
     float counterTotal = charToFloatCustom(event[4], 2);
-    writeU32(counter,counterTotal *100);
-    writeU16(iconstatus,0);
-    // También loguea esta trama si quieres verla en debug
+
+    // Convertir de forma controlada
+    uint32_t quantityValue = (uint32_t)(counterTotal * 100.0f + 0.5f);
+
+    config.begin("LastRefuel");
+
+    config.setInt("Quantity", quantityValue);
+
+    writeU32(counter, quantityValue);
+    writeU16(iconstatus, 0);
+
+    config.end();
+
+    DebugSerial.println("===== GET FINDESPACHO =====");
+    DebugSerial.print("event[4]: ");
+    DebugSerial.println(event[4]);
+    DebugSerial.print("counterTotal: ");
+    DebugSerial.println(counterTotal, 2);
+    DebugSerial.print("quantityValue: ");
+    DebugSerial.println(quantityValue);
+    DebugSerial.print("guardado preferences: ");
+
     DebugSend("[TX]", totalCounter);
     HostSerial.println(SendCommandCPU(totalCounter));
+}
 
 
+void ShowInputScreen(char event[][50]) {
+  char answer[80];
+  const char* commandType = "SGET";
+
+  // Detectar tipo de comando
+  if (strcmp(event[3], "SGETA") == 0) {
+    commandType = "SGETA";
+  }
+
+  // Guardar datos en screenflow
+  strncpy(screenflow.inputNameKeypad, event[4], sizeof(screenflow.inputNameKeypad) - 1);
+  screenflow.inputNameKeypad[sizeof(screenflow.inputNameKeypad) - 1] = '\0';
+
+  strncpy(screenflow.decimalCursors, event[5], sizeof(screenflow.decimalCursors) - 1);
+  screenflow.decimalCursors[sizeof(screenflow.decimalCursors) - 1] = '\0';
+
+  strncpy(screenflow.device, event[1], sizeof(screenflow.device) - 1);
+  screenflow.device[sizeof(screenflow.device) - 1] = '\0';
+
+  // Construir respuesta
+  snprintf(answer, sizeof(answer),
+           "<RES|SCREEN|%s|%s|%s|%s|OK>",
+           event[1],
+           commandType,
+           event[4],
+           event[5]);
+
+  // Flujo común
+  dwinKeypadTouch(AUTO_CURSOR);
+  DebugSend("[TX]", answer);
+  HostSerial.println(SendCommandCPU(answer));
+
+  dwinChangePage_VP(1);
+  delay(600);
+
+  dwinKeypadTouch(AUTO_CURSOR);
+  writeTextClean(inputName, event[4], 20);
+};
+
+
+void factory(char event[][50]){
+
+  HostSerial.println(SendCommandCPU("<REQ|SCREEN|MAIN|FACTORY|34>"));
+  DebugSend("[TX]","FACTORY");
 };
 
 
 
-void ShowInputScreen(char event[][50]){
 
-char answer[50];
-dwinKeypadTouch(AUTO_CURSOR);
-
-snprintf(answer,sizeof(answer),"<RES|SCREEN|%s|SGET|%s|%s|OK>", event[1],event[4],event[5]);
-
-strncpy(screenflow.inputNameKeypad,event[4],sizeof(screenflow.inputNameKeypad) - 1 );
-strncpy(screenflow.decimalCursors,event[5],sizeof(screenflow.decimalCursors) - 1 );
-strncpy(screenflow.device,event[1],sizeof(screenflow.device) - 1 );
-
-DebugSend("[TX]",answer);
-HostSerial.println(SendCommandCPU(answer));
-dwinChangePage_VP(1);
-delay(600);
-dwinKeypadTouch(AUTO_CURSOR);
-writeTextClean(inputName,event[4],20);
-
-
-};
 
 
 void Printedvehicle(char event[][50]){
 char answer[100];
-
+config.begin("LastRefuel");
 
 if(strcmp(event[3], "TAGID") == 0){
 snprintf(answer,sizeof(answer) ,"<RES|SCREEN|%s|TAGID|%s>", event[1],event[4]);
+config.setString("vehicle", String(event[4]));
 DebugSend("[TX]",answer);
 HostSerial.println(SendCommandCPU(answer));
 writeTextClean(vehicleID,event[4],20);
@@ -362,6 +431,7 @@ float presecounter = charToFloatCustom( event[7],2);
 float initcouter = charToFloatCustom( event[5],2);
 writeU32(preset,presecounter * 100);
 writeU32(counter,initcouter * 100);
+config.end();
 
 };
 
@@ -391,6 +461,23 @@ void splashScreen(int value) {
     
 
 };
+
+
+
+void factoryScreenData(char event[][50]){
+char answer[100];
+config.begin("LastRefuel");
+
+config.setString("vehicle", "NA");
+config.setInt("Quantity", 0);
+snprintf(answer,sizeof(answer),"<RES|SCREEN|%S|FACTORY|OK>",event[1]);
+DebugSend("[TX]", "Variables inicializadas");
+HostSerial.println(SendCommandCPU(answer));
+
+config.end();
+
+};
+
 
 
 
@@ -449,6 +536,41 @@ void dwinErrorTone_Loud() {
 };
 
 
+
+void LoadLastRefuel() {
+  const char* ns = "LastRefuel";
+  const char* keyVehicle  = "vehicle";
+  const char* keyQuantity = "Quantity";
+
+  config.begin(ns);
+
+  String vehicle = config.getString(keyVehicle, "");
+  uint32_t quantityLast = config.getInt(keyQuantity, 0);
+
+  // Limitar longitud por seguridad
+  if (vehicle.length() >= 20) {
+    vehicle = vehicle.substring(0, 19);
+  }
+
+  // Restaurar datos en pantalla
+  writeTextClean(vehicleID, vehicle.c_str(), 20);
+  writeU32(counter, quantityLast);
+
+  // Debug
+  DebugSerial.println("===== LOAD LAST REFUEL =====");
+  DebugSerial.print("Vehicle: ");
+  DebugSerial.println(vehicle.length() ? vehicle : "(vacio)");
+  DebugSerial.print("Quantity: ");
+  DebugSerial.println(quantityLast);
+
+  if (vehicle.length() == 0 && quantityLast == 0) {
+    DebugSend("[TX]", "No habia datos guardados de ultimo abastecimiento");
+  } else {
+    DebugSend("[TX]", "Restauracion completa");
+  }
+
+  config.end();
+};
 
 // Función auxiliar para enviar la respuesta
 static void sendBuzzerResponse(const char* device, const char* command, const char* status) {

@@ -34,4 +34,6 @@ void dwinErrorTone_Loud();
 void factory(char event[][50]);
 void factoryScreenData(char event[][50]);
 void LoadLastRefuel();
+void setDateScreen(char event[][50]);
+void setEnableSCreen(char event[][50]);
 #endif

@@ -90,6 +90,7 @@ void processMessage(const char *msg) {
 Command commands[] = {
     {"REQMAINSCREENSTGS",GoHomePage},
     {"REQRASPSCREENSTGS",GoHomePage},
+    {"REQAPPCONFIG",getConfigData},
     {"RESMAINCONFIG",getConfigData},
     {"REQRASPBANNER",Showbanner},
     {"REQRASPSCREENBANNER",Showbanner},
@@ -106,7 +107,9 @@ Command commands[] = {
     {"REQRFIDQR",QRscreen},
     {"REQRASPSCREENBUZZER",ExecuteBuzzer},
     {"REQSCREENMAINFACTORY",factory},
-    {"REQMESCREENFACTORY",factoryScreenData}
+    {"REQMESCREENFACTORY",factoryScreenData},
+    {"REQAPPHTC",setDateScreen},
+    {"REQAPPSCREENKEYBOARD",setEnableSCreen}
 };
 
 
@@ -138,7 +141,6 @@ HostSerial.println(SendCommandCPU(initScreen));
 DebugSerial.println("DEBUG listo usb");
 dwinChangePage_VP(2);
 splashScreen(0);
-
 delay(3000);
 
 delay(400);
@@ -147,6 +149,8 @@ dwinBuzzerInit_ByRegister();
 delay(200);
 buzzer.begin();
 LoadLastRefuel();
+//delay(1000);
+//buzzer.playStartup();
 }
 
 

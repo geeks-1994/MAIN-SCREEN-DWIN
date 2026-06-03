@@ -50,6 +50,7 @@ ScreenFlow screenflow = {
   .device = ""
 }; 
 
+// funciones de  uso general
 int GetLengData(char event[][50]) {
     int i = 0;
     int len = 0;
@@ -70,6 +71,9 @@ int GetLengData(char event[][50]) {
     return 0; // no hay cadenas válidas
 };
 
+int CharArrayToInt(const char value[]) {
+  return atoi(value);
+}
 
 void DebugSend(const char *label, const char *data) {
     DebugSerial.print("[DEBUG] ");
@@ -127,6 +131,18 @@ float charToFloatCustom(const char *str, uint8_t decimals) {
 };
 
 
+void GetHomePageNumber() {
+  config.begin("LastRefuel"); // true = solo lectura
+
+  // Leer de memoria la página de inicio
+  int page = config.getInt("HomeScreen", 0);
+
+  config.end();
+
+  dwinChangePage_VP(page);
+};
+
+
 
 void GoHomePage(char event[][50]) {
 
@@ -152,8 +168,9 @@ void GoHomePage(char event[][50]) {
 
     delay(600);
     HostSerial.println(SendCommandCPU(totalCounter));
-     delay(600);
-    dwinChangePage_VP(0);
+     delay(800);
+   // dwinChangePage_VP(0);
+   GetHomePageNumber();
 
 };
 
@@ -177,7 +194,7 @@ void getConfigData(char event[][50]) {
     DebugSend("Unidad de medida:", event[5]);
     if(strcmp(event[5], "Galones:Gal") == 0){
    writeTextClean(unitMeasure, "Gal", 3);
-    }else if(strcmp(event[5], "Litros:Lts") == 0){
+    }else if(strcmp(event[5], "Litros:l") == 0){
 writeTextClean(unitMeasure, "Lts", 3);
     }
 
@@ -222,7 +239,18 @@ writeTextClean(unitMeasure, "Lts", 3);
 
     DebugSend("totalizador:", event[5]);
 
-  }
+  }else if(strcmp(answer,"CONFIGHOMENUMBER") == 0){
+
+    config.begin("LastRefuel"); // true = solo lectura
+
+    int HomeScreen = CharArrayToInt(event[5]);
+    config.setInt("HomeScreen",HomeScreen);
+
+    config.end();
+
+    DebugSend("[TX] ScreenOption:", event[5]);
+
+  }   
 };
 
 
@@ -343,7 +371,7 @@ void Getfindespacho(char event[][50]) {
     config.setInt("Quantity", quantityValue);
 
     writeU32(counter, quantityValue);
-    writeU16(iconstatus, 0);
+   
 
     config.end();
 
@@ -358,10 +386,33 @@ void Getfindespacho(char event[][50]) {
 
     DebugSend("[TX]", totalCounter);
     HostSerial.println(SendCommandCPU(totalCounter));
-}
+
+     writeU16(iconstatus,0);
+    delay(1000);
+    writeU16(iconstatus,0);
+
+};
+
+
+
+void GetInputScreen() {
+  config.begin("LastRefuel");
+
+  bool enableKeypadTouch = config.getBool("enable_keypad_touch", true);
+
+  config.end();
+
+  if (enableKeypadTouch) {
+    dwinChangePage_VP(1);  // Pantalla con keypad touch
+  } else {
+    dwinChangePage_VP(4);  // Pantalla alternativa
+  }
+};
+
 
 
 void ShowInputScreen(char event[][50]) {
+
   char answer[80];
   const char* commandType = "SGET";
 
@@ -393,7 +444,8 @@ void ShowInputScreen(char event[][50]) {
   DebugSend("[TX]", answer);
   HostSerial.println(SendCommandCPU(answer));
 
-  dwinChangePage_VP(1);
+ // dwinChangePage_VP(1);
+  GetInputScreen();
   delay(600);
 
   dwinKeypadTouch(AUTO_CURSOR);
@@ -470,6 +522,11 @@ config.begin("LastRefuel");
 
 config.setString("vehicle", "NA");
 config.setInt("Quantity", 0);
+
+//settings screen Flow.
+config.setBool("enable_keypad_touch",true);
+config.setInt("HomeScreen",0);
+
 snprintf(answer,sizeof(answer),"<RES|SCREEN|%S|FACTORY|OK>",event[1]);
 DebugSend("[TX]", "Variables inicializadas");
 HostSerial.println(SendCommandCPU(answer));
@@ -477,6 +534,9 @@ HostSerial.println(SendCommandCPU(answer));
 config.end();
 
 };
+
+
+
 
 
 
@@ -535,9 +595,8 @@ void dwinErrorTone_Loud() {
   dwinSetBuzzDuty(0x00F0);
 };
 
-
-
 void LoadLastRefuel() {
+
   const char* ns = "LastRefuel";
   const char* keyVehicle  = "vehicle";
   const char* keyQuantity = "Quantity";
@@ -568,7 +627,6 @@ void LoadLastRefuel() {
   } else {
     DebugSend("[TX]", "Restauracion completa");
   }
-
   config.end();
 };
 
@@ -612,3 +670,78 @@ void ExecuteBuzzer(char event[][50]) {
         sendBuzzerResponse(device, command, "UNKNOWN");
     }
 };
+
+const char* convertDateTimeToHex(const char* input) {
+
+    static char output[30];
+
+    int yy, mm, dd, hh, mi, ss;
+
+    if (sscanf(input, "%d-%d-%d %d:%d:%d",
+               &yy, &mm, &dd,
+               &hh, &mi, &ss) != 6) {
+        return "00-00-00 00:00:00";
+    }
+
+    snprintf(output, sizeof(output),
+             "%02X%02X%02X%02X%02X%02X",
+             yy, mm, dd, hh, mi, ss);
+
+    return output;
+};
+
+
+
+// Convierte una cadena hexadecimal tipo "023BA897700D0A03" a bytes binarios
+int hexStringToBytesGPS(const String& hexStr, byte* buffer, size_t bufferSize) {
+  int len = hexStr.length() / 2;
+  if (len > (int)bufferSize) len = bufferSize;
+
+  for (int i = 0; i < len; i++) {
+    String byteStr = hexStr.substring(i * 2, i * 2 + 2);
+    buffer[i] = (byte) strtol(byteStr.c_str(), NULL, 16);
+  }
+  return len;
+};
+
+
+
+void setDateScreen(char event[][50]){
+
+  char answer[50];
+  int n = snprintf(answer, sizeof(answer), "%s%s", event[3], event[4]); 
+
+  String Datasend = convertDateTimeToHex(event[5]);
+  String codeAVL = "5AA50B82009C5AA5" + Datasend;
+  DebugSerial.print("Trama HEX:");
+  DebugSerial.println(codeAVL);
+  byte buffer[32];
+
+  int len = hexStringToBytesGPS(codeAVL, buffer, sizeof(buffer));
+
+   DwinSerial.write(buffer,len);
+
+
+DebugSend("[TX] SETDATE", "HORAS SET OK");
+};
+
+void setEnableSCreen(char event[][50]){
+
+//char answer[100];
+config.begin("LastRefuel");
+
+if(strcmp(event[4],"SHOW") == 0){
+config.setBool("enable_keypad_touch",true);
+DebugSend("[TX] enable Touch", "TRUE");
+}
+if(strcmp(event[4], "HIDE") == 0 ){
+
+config.setBool("enable_keypad_touch",false);
+DebugSend("[TX] enable Touch", "FALSE");
+}
+
+config.end();
+
+
+};
+

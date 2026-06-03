@@ -1,3 +1,4 @@
+#include "esp32-hal-gpio.h"
 #include "BuzzerMelodies.h"
 
 BuzzerMelodies::BuzzerMelodies() {

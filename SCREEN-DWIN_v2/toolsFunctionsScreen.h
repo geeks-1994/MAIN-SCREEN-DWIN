@@ -16,6 +16,8 @@ typedef struct {
 
 extern  ScreenFlow screenflow;
 
+
+
 void GoHomePage(char event[][50]);
 void getConfigData(char event[][50]);
 void Showbanner(char event[][50]);
@@ -36,4 +38,5 @@ void factoryScreenData(char event[][50]);
 void LoadLastRefuel();
 void setDateScreen(char event[][50]);
 void setEnableSCreen(char event[][50]);
+
 #endif

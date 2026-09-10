@@ -95,7 +95,7 @@ Command commands[] = {
     {"REQRASPBANNER",Showbanner},
     {"REQRASPSCREENBANNER",Showbanner},
     {"REQMAINBANNER",Showbanner},
-    {"REQMAINSCREENPING",ResponsePing},
+     {"REQMAINSCREENPING",ResponsePing},
     {"INFMAINSCREENDINA",DinaRefuel},
     {"INFMAINDESPACHO",printRefuel},
     {"REQMAINFINDESPACHO",Getfindespacho},

@@ -43,12 +43,17 @@ static  char *IDPCB        = "<REQ|SCREEN|MAIN|CONFIG|GSID>";
 static  char *name_station = "<REQ|SCREEN|MAIN|CONFIG|GSNM>";
 static  char *unit_measure = "<REQ|SCREEN|MAIN|CONFIG|GSUM>";
 
+// Valores de decimales en el conteo final.
+int decimalCounter = 2;
+
 // estados de pantalla
 ScreenFlow screenflow = {
   .inputNameKeypad = "",
   .decimalCursors = "",
   .device = ""
 }; 
+
+
 
 // funciones de  uso general
 int GetLengData(char event[][50]) {
@@ -83,12 +88,16 @@ void DebugSend(const char *label, const char *data) {
 };
 
 
-float charToFloatCustom(const char *str, uint8_t decimals) {
+float charToFloatCustom(const char *str,uint8_t decimals,bool customRound = false,uint8_t roundFrom = 7) {
+   
     float result = 0.0f;
     float sign = 1.0f;
+
     uint32_t integerPart = 0;
     uint32_t decimalPart = 0;
+
     uint8_t decimalCount = 0;
+    uint8_t nextDecimal = 0;
 
     // Validación básica
     if (str == NULL || *str == '\0') {
@@ -110,25 +119,95 @@ float charToFloatCustom(const char *str, uint8_t decimals) {
     // Parte decimal
     if (*str == '.') {
         str++;
-        while (*str >= '0' && *str <= '9' && decimalCount < decimals) {
-            decimalPart = decimalPart * 10 + (*str - '0');
+
+        // Leer los decimales solicitados
+        while (
+            *str >= '0' &&
+            *str <= '9' &&
+            decimalCount < decimals
+        ) {
+            decimalPart =
+                decimalPart * 10 +
+                (*str - '0');
+
             decimalCount++;
             str++;
         }
+
+        /*
+         * Guardamos el siguiente decimal.
+         *
+         * Este será utilizado solamente
+         * si customRound == true.
+         */
+        if (*str >= '0' && *str <= '9') {
+            nextDecimal = *str - '0';
+        }
     }
 
-    // Convertimos a float
+    /*
+     * REDONDEO CUSTOM
+     *
+     * Ejemplo:
+     * decimals = 1
+     * roundFrom = 7
+     *
+     * 12.67 -> 12.6
+     * 12.68 -> 12.7
+     * 12.69 -> 12.7
+     */
+    if (
+        customRound &&
+        nextDecimal >= roundFrom
+    ) {
+        decimalPart++;
+
+        /*
+         * Detectar acarreo.
+         *
+         * Ejemplo:
+         * 12.99 con 1 decimal
+         * decimalPart = 9
+         *
+         * al incrementar:
+         * decimalPart = 10
+         *
+         * entonces:
+         * integerPart = 13
+         * decimalPart = 0
+         */
+        uint32_t decimalLimit = 1;
+
+        for (uint8_t i = 0; i < decimalCount; i++) {
+            decimalLimit *= 10;
+        }
+
+        if (
+            decimalCount > 0 &&
+            decimalPart >= decimalLimit
+        ) {
+            integerPart++;
+            decimalPart = 0;
+        }
+    }
+
+    // Construcción del float
     result = (float)integerPart;
 
     float divisor = 1.0f;
+
     for (uint8_t i = 0; i < decimalCount; i++) {
         divisor *= 10.0f;
     }
 
-    result += (float)decimalPart / divisor;
+    if (decimalCount > 0) {
+        result +=
+            (float)decimalPart /
+            divisor;
+    }
 
     return result * sign;
-};
+}
 
 
 void GetHomePageNumber() {
@@ -239,7 +318,8 @@ writeTextClean(unitMeasure, "Lts", 3);
 
     DebugSend("totalizador:", event[5]);
 
-  }else if(strcmp(answer,"CONFIGHOMENUMBER") == 0){
+  }
+  else if(strcmp(answer,"CONFIGHOMENUMBER") == 0){
 
     config.begin("LastRefuel"); // true = solo lectura
 
@@ -250,7 +330,19 @@ writeTextClean(unitMeasure, "Lts", 3);
 
     DebugSend("[TX] ScreenOption:", event[5]);
 
-  }   
+  } 
+  else if( strcmp(answer, "CONFIGDECIMAL") == 0){
+  
+    config.begin("LastRefuel");
+    
+    int decimals = CharArrayToInt(event[5]);
+    config.setInt("Decimals",decimals);
+
+    config.end();
+    DebugSend("[TX] Decimales:", event[5]);
+  
+  } 
+
 };
 
 
@@ -328,17 +420,15 @@ void DinaRefuel(char event[][50]) {
   DebugSerial.print("Vehicle: ");
   DebugSerial.println(vehicle);
   DebugSend("[TX]", "DinaRefuel procesado");
-}
+};
 
 void printRefuel(char event[][50]){
-
+  
 float counterprint = charToFloatCustom(event[4],2);
 float flowRatePrint = charToFloatCustom(event[7],2);
 
 writeU32(counter,counterprint * 100);
 writeU16(flowRate,flowRatePrint * 100);
-
-
 };
 
 void Getfindespacho(char event[][50]) {
@@ -348,7 +438,7 @@ void Getfindespacho(char event[][50]) {
         event[5][0] == '\0' || event[6][0] == '\0') {
         DebugSerial.println("[DEBUG] Getfindespacho: faltan campos en event[]");
         return;
-    }
+    };
 
     char answer[200];
 
@@ -361,7 +451,7 @@ void Getfindespacho(char event[][50]) {
 
     delay(400);
 
-    float counterTotal = charToFloatCustom(event[4], 2);
+    float counterTotal = charToFloatCustom(event[4], decimalCounter,true,7);
 
     // Convertir de forma controlada
     uint32_t quantityValue = (uint32_t)(counterTotal * 100.0f + 0.5f);
@@ -387,7 +477,7 @@ void Getfindespacho(char event[][50]) {
     DebugSend("[TX]", totalCounter);
     HostSerial.println(SendCommandCPU(totalCounter));
 
-     writeU16(iconstatus,0);
+    writeU16(iconstatus,0);
     delay(1000);
     writeU16(iconstatus,0);
 
@@ -401,6 +491,8 @@ void GetInputScreen() {
   bool enableKeypadTouch = config.getBool("enable_keypad_touch", true);
 
   config.end();
+
+ // DebugSerial.printl(enableKeypadTouch);
 
   if (enableKeypadTouch) {
     dwinChangePage_VP(1);  // Pantalla con keypad touch
@@ -509,9 +601,8 @@ void QRscreen(char event[][50]){
 
 void splashScreen(int value) {
 
-    writeTextClean(bannersplashscreen,"......Cargando gstation 5.9 ....", 150);
+  writeTextClean(bannersplashscreen,"......Cargando gstation 5.9 ....", 150);
     
-
 };
 
 
@@ -526,6 +617,7 @@ config.setInt("Quantity", 0);
 //settings screen Flow.
 config.setBool("enable_keypad_touch",true);
 config.setInt("HomeScreen",0);
+config.setInt("Decimals",2);
 
 snprintf(answer,sizeof(answer),"<RES|SCREEN|%S|FACTORY|OK>",event[1]);
 DebugSend("[TX]", "Variables inicializadas");
@@ -600,11 +692,13 @@ void LoadLastRefuel() {
   const char* ns = "LastRefuel";
   const char* keyVehicle  = "vehicle";
   const char* keyQuantity = "Quantity";
+  const char* keyDecimal = "Decimals" ;
 
   config.begin(ns);
 
   String vehicle = config.getString(keyVehicle, "");
   uint32_t quantityLast = config.getInt(keyQuantity, 0);
+  decimalCounter = config.getInt(keyDecimal,0);
 
   // Limitar longitud por seguridad
   if (vehicle.length() >= 20) {
